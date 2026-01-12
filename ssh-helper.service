@@ -1,0 +1,21 @@
+[Unit]
+Description=SSH Helper - Web Terminal
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/src/ssh-helper
+ExecStart=/usr/bin/node /home/ubuntu/src/ssh-helper/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssh-helper
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target

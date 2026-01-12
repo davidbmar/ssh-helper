@@ -1,0 +1,7 @@
+{
+  "allowAll": true,
+  "ipWhitelist": [],
+  "shell": "/bin/bash",
+  "terminalCols": 120,
+  "terminalRows": 30
+}

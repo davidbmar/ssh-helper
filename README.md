@@ -1,314 +1,339 @@
-# SSH Helper - Dynamic IP Whitelist Manager
+# SSH Helper - Web-Based Terminal
 
-Manage EC2 security group rules to grant temporary SSH access based on dynamic IP addresses.
-
-## Overview
-
-SSH Helper is a CLI tool that allows developers to quickly whitelist their current IP address for SSH access to EC2 instances. Perfect for teams working from home/coffee shops with dynamic IPs.
+A lightweight web-based SSH terminal with IP whitelisting support. Provides secure browser-based access to a shell terminal.
 
 ## Features
 
-- 🔐 **Dynamic IP Whitelisting** - Add your current IP to security group
-- ⏰ **Time-Limited Access** - Automatically expire rules after specified duration
-- 📋 **IP Management** - List, add, and remove IP rules
-- 🔍 **Audit Logging** - Track who added what IP and when
-- 🚀 **Simple CLI** - Easy-to-use command-line interface
-- ☁️ **AWS Native** - Uses boto3 with IAM role credentials
+- 🖥️ **Full Terminal Emulation**: Complete xterm.js terminal with color support
+- 🔒 **IP Whitelisting**: Optional IP-based access control
+- 🔐 **Authentication Gateway**: Works seamlessly with nginx + Cognito auth
+- 📱 **Responsive Design**: Works on desktop and mobile browsers
+- ⚡ **WebSocket Connection**: Real-time terminal I/O
+- 🎨 **Modern UI**: Clean, professional interface
 
 ## Architecture
 
 ```
-Developer (Dynamic IP)
-     ↓
-ssh-helper CLI
-     ↓
-AWS API (boto3)
-     ↓
-EC2 Security Group Rules
-     ↓
-EC2 Instance (SSH Port 22)
+User → Nginx (HTTPS) → OAuth2 Proxy (Cognito) → SSH Helper (port 8080)
+                                                      ↓
+                                                  PTY (bash)
 ```
 
-## Quick Start
+**Authentication Flow:**
+1. User accesses https://52.43.35.1/
+2. Nginx requires authentication via oauth2-proxy
+3. OAuth2-proxy redirects to Cognito for login
+4. After successful auth, nginx proxies to ssh-helper on port 8080
+5. SSH helper receives authenticated user info via headers
+6. Terminal session spawned for the authenticated user
 
-### Installation
+**Key Design Decision:** Authentication is handled entirely by nginx + oauth2-proxy. The ssh-helper application trusts the `X-User-Email` and `X-Auth-Request-User` headers passed from nginx, simplifying the application code and centralizing auth logic.
+
+## Prerequisites
+
+- Node.js 16+
+- npm or yarn
+- Linux environment (uses PTY)
+
+## Installation
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/ssh-helper.git
-cd ssh-helper
+cd /home/ubuntu/src/ssh-helper
 
 # Install dependencies
-pip install -r requirements.txt
-
-# Or use npm for Node.js version
 npm install
-```
 
-### Basic Usage
-
-```bash
-# Add your current IP for 24 hours
-./ssh-helper.py add --duration=24h
-
-# Add specific IP
-./ssh-helper.py add --ip=203.0.113.5 --user=john
-
-# List all whitelisted IPs
-./ssh-helper.py list
-
-# Remove IP
-./ssh-helper.py remove --ip=203.0.113.5
-
-# Remove your current IP
-./ssh-helper.py remove --me
+# Configure (optional)
+cp config.json config.local.json
+# Edit config.local.json as needed
 ```
 
 ## Configuration
 
-Create `config.yml`:
-
-```yaml
-aws:
-  region: us-east-1
-  security_group_id: sg-0123456789abcdef0
-
-defaults:
-  default_duration: 24h
-  max_duration: 168h  # 7 days
-
-logging:
-  audit_log_path: ./logs/audit.log
-  cloudwatch_log_group: /ssh-helper/audit
-```
-
-## IAM Permissions
-
-The tool requires these IAM permissions:
+Edit `config.json` to customize behavior:
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:DescribeSecurityGroups",
-        "ec2:AuthorizeSecurityGroupIngress",
-        "ec2:RevokeSecurityGroupIngress",
-        "ec2:DescribeSecurityGroupRules"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
-      "Resource": "arn:aws:logs:*:*:log-group:/ssh-helper/*"
-    }
+  "allowAll": true,              // Allow all IPs (set false to enable whitelist)
+  "ipWhitelist": [               // IPs to allow (when allowAll=false)
+    "192.168.1.0/24",
+    "10.0.0.100"
+  ],
+  "shell": "/bin/bash",          // Shell to spawn
+  "terminalCols": 120,           // Default terminal columns
+  "terminalRows": 30             // Default terminal rows
+}
+```
+
+### IP Whitelist Options
+
+**Allow All (Recommended):**
+```json
+{
+  "allowAll": true,
+  "ipWhitelist": []
+}
+```
+
+Since nginx already handles authentication via Cognito, IP whitelisting is typically unnecessary. Use `allowAll: true` for simplicity.
+
+**Whitelist Specific IPs:**
+```json
+{
+  "allowAll": false,
+  "ipWhitelist": [
+    "192.168.1.100",              // Single IP
+    "10.0.0.0/24",                // CIDR notation (all IPs in 10.0.0.x)
+    "172.16.0.0/16"               // Larger CIDR block
   ]
 }
 ```
 
-## Commands
+## Running the Application
 
-### Add IP Address
+### Development Mode
 
 ```bash
-# Add current IP (auto-detected)
-./ssh-helper.py add
-
-# Add specific IP
-./ssh-helper.py add --ip=203.0.113.5
-
-# Add with custom duration
-./ssh-helper.py add --duration=48h
-
-# Add with description
-./ssh-helper.py add --user=john --description="John's home office"
+npm run dev
 ```
 
-### List IP Addresses
+Uses nodemon for auto-restart on file changes.
+
+### Production Mode
 
 ```bash
-# List all IPs
-./ssh-helper.py list
-
-# List with expiry times
-./ssh-helper.py list --show-expiry
-
-# List only your IPs
-./ssh-helper.py list --me
+npm start
 ```
 
-### Remove IP Address
+### Systemd Service (Recommended)
 
-```bash
-# Remove specific IP
-./ssh-helper.py remove --ip=203.0.113.5
+Create `/etc/systemd/system/ssh-helper.service`:
 
-# Remove current IP
-./ssh-helper.py remove --me
+```ini
+[Unit]
+Description=SSH Helper - Web Terminal
+After=network.target
 
-# Remove all expired IPs
-./ssh-helper.py cleanup
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/src/ssh-helper
+ExecStart=/usr/bin/node /home/ubuntu/src/ssh-helper/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssh-helper
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-## Example Workflow
+Enable and start:
 
 ```bash
-# Developer starts work from home
-$ ./ssh-helper.py add --duration=8h
-✓ Added 203.0.113.5 to security group sg-abc123
-✓ SSH access granted until 2026-01-12 17:00 UTC
-✓ You can now SSH to EC2 instances
-
-# Connect to instance
-$ ssh ubuntu@ec2-instance.compute.amazonaws.com
-# Works!
-
-# At end of day, remove access
-$ ./ssh-helper.py remove --me
-✓ Removed 203.0.113.5 from security group
-✓ SSH access revoked
+sudo systemctl daemon-reload
+sudo systemctl enable ssh-helper
+sudo systemctl start ssh-helper
+sudo systemctl status ssh-helper
 ```
 
-## Advanced Usage
-
-### Automatic Cleanup
-
-Set up a cron job to remove expired IPs:
+View logs:
 
 ```bash
-# Add to crontab
-0 * * * * /path/to/ssh-helper.py cleanup
+# Real-time logs
+sudo journalctl -u ssh-helper -f
+
+# Recent logs
+sudo journalctl -u ssh-helper -n 100
 ```
 
-### Web Interface (Optional)
+## Nginx Configuration
 
-Start the web UI:
+The application expects to be proxied through nginx with authentication. Example nginx config (already configured in `/etc/nginx/sites-enabled/auth-gateway`):
 
-```bash
-python server.py
-# Access at http://localhost:5000
+```nginx
+upstream ssh_terminal {
+    server 127.0.0.1:8080;
+}
+
+location / {
+    # Authentication check
+    auth_request /oauth2/auth;
+    error_page 401 = /oauth2/start?rd=$scheme://$host$request_uri;
+
+    # Pass authenticated user info
+    auth_request_set $user $upstream_http_x_auth_request_user;
+    auth_request_set $email $upstream_http_x_auth_request_email;
+
+    # Proxy to SSH terminal
+    proxy_pass http://ssh_terminal;
+    proxy_http_version 1.1;
+    proxy_set_header X-User-Email $email;
+    proxy_set_header X-Auth-Request-User $user;
+
+    # WebSocket support
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+}
 ```
 
-Protected by cognito-auth-gateway in production.
+## API Endpoints
 
-## Deployment
+### GET /
+Returns the terminal UI (HTML page).
 
-### Option 1: Run locally
+### GET /api/user
+Returns authenticated user information.
 
-```bash
-pip install -r requirements.txt
-./ssh-helper.py add
+**Response:**
+```json
+{
+  "email": "user@example.com",
+  "name": "username"
+}
 ```
 
-### Option 2: Deploy behind auth gateway
+### GET /health
+Health check endpoint.
 
-```bash
-# Deploy web UI behind cognito-auth-gateway
-# See docs/DEPLOYMENT.md
+**Response:**
+```json
+{
+  "status": "ok",
+  "service": "ssh-helper"
+}
 ```
 
-### Option 3: AWS Lambda
+### WebSocket /
+WebSocket connection for terminal I/O.
 
-```bash
-# Deploy as Lambda function
-# See terraform/lambda/
+**Client → Server Messages:**
+```json
+// Send user input
+{ "type": "input", "data": "ls\n" }
+
+// Resize terminal
+{ "type": "resize", "cols": 120, "rows": 30 }
+```
+
+**Server → Client Messages:**
+```json
+// Terminal output
+{ "type": "output", "data": "file1.txt\nfile2.txt\n" }
+
+// Welcome message
+{ "type": "welcome", "message": "Connected as user@example.com\n" }
+
+// Session ended
+{ "type": "exit", "code": 0 }
 ```
 
 ## Security Considerations
 
-1. **IP Spoofing Prevention**
-   - Use trusted IP detection services
-   - Validate IP format before adding
+1. **Authentication:** Handled by nginx + oauth2-proxy (Cognito). Application trusts nginx headers.
+2. **IP Whitelist:** Optional additional layer. Not required when using Cognito auth.
+3. **User Isolation:** Each terminal session runs as the server's user (ubuntu). Consider containerization for multi-tenant scenarios.
+4. **HTTPS:** Always use HTTPS in production (handled by nginx).
+5. **Command Injection:** Terminal input is passed directly to PTY. Only grant access to trusted users.
 
-2. **Audit Trail**
-   - All actions logged to CloudWatch
-   - Local audit log with timestamps
-
-3. **Access Control**
-   - IAM policies restrict who can modify security groups
-   - Web UI protected by authentication gateway
-
-4. **Time Limits**
-   - Enforce maximum duration (default: 7 days)
-   - Automatic cleanup of expired rules
-
-## Troubleshooting
-
-### Issue: "Permission denied"
-
-**Solution:** Check IAM permissions. EC2 instance needs appropriate role.
-
-```bash
-# Check current IAM role
-aws sts get-caller-identity
-
-# Verify security group access
-aws ec2 describe-security-groups --group-ids sg-abc123
-```
-
-### Issue: "IP not detected"
-
-**Solution:** Specify IP manually.
-
-```bash
-# Get your IP
-curl ifconfig.me
-
-# Add it manually
-./ssh-helper.py add --ip=$(curl -s ifconfig.me)
-```
-
-### Issue: "Security group not found"
-
-**Solution:** Update `config.yml` with correct security group ID.
-
-```bash
-# List security groups
-aws ec2 describe-security-groups
-```
-
-## Development
-
-### Run Tests
-
-```bash
-pytest tests/
-```
-
-### Code Structure
+## File Structure
 
 ```
 ssh-helper/
-├── ssh-helper.py          # Main CLI tool
-├── server.py              # Optional web interface
-├── requirements.txt       # Python dependencies
-├── config.yml.example     # Example configuration
-├── lib/
-│   ├── ip_detector.py     # IP detection logic
-│   ├── sg_manager.py      # Security group operations
-│   └── audit_logger.py    # Audit logging
-├── terraform/
-│   └── iam.tf            # IAM permissions
-└── docs/
-    └── DEPLOYMENT.md      # Deployment guide
+├── server.js              # Main application server
+├── package.json           # Dependencies and scripts
+├── config.json            # Configuration file
+├── .gitignore            # Git ignore rules
+├── README.md             # This file
+└── public/               # Static files (served at /)
+    ├── index.html        # Terminal UI page
+    ├── terminal.js       # WebSocket client logic
+    └── styles.css        # UI styling
 ```
 
-## Related Projects
+## Troubleshooting
 
-- [easy-cognito-nginx-gateway-auth](https://github.com/YOUR_USERNAME/easy-cognito-nginx-gateway-auth) - Authentication gateway
-- [website-cloner](https://github.com/YOUR_USERNAME/website-cloner) - Website cloning tool
+### Terminal not connecting
+
+Check that:
+1. Server is running on port 8080: `netstat -tlnp | grep 8080`
+2. WebSocket connection succeeds (check browser console)
+3. Nginx is proxying correctly: `sudo nginx -t && sudo systemctl status nginx`
+
+### IP blocked
+
+If you see "Access denied" or 403 errors:
+1. Check server logs: `journalctl -u ssh-helper -n 50`
+2. Verify your IP is whitelisted in `config.json`
+3. Or set `"allowAll": true` to disable IP filtering
+
+### Authentication loop
+
+If redirected to Cognito repeatedly:
+1. Check oauth2-proxy is running: `systemctl status oauth2-proxy`
+2. Verify nginx auth_request configuration
+3. Clear browser cookies and try again
+
+### Terminal crashes
+
+Check logs for errors:
+```bash
+sudo journalctl -u ssh-helper -f
+```
+
+Common issues:
+- PTY spawn failure (check shell path in config)
+- Permission issues (ensure user has shell access)
+- Out of memory (monitor with `htop`)
+
+## Development
+
+### Adding Features
+
+The application has three main components:
+
+1. **server.js** - Backend (Express + WebSocket + PTY)
+2. **public/index.html** - UI structure
+3. **public/terminal.js** - Frontend logic (xterm.js + WebSocket)
+
+### Useful npm Scripts
+
+```bash
+npm start          # Production mode
+npm run dev        # Development with auto-reload
+```
+
+### Environment Variables
+
+- `PORT` - Server port (default: 8080)
+- `CONFIG_PATH` - Path to config file (default: ./config.json)
+- `NODE_ENV` - Environment (development/production)
+
+## Deployment Checklist
+
+- [ ] Dependencies installed: `npm install`
+- [ ] Config file created and reviewed
+- [ ] Systemd service file created
+- [ ] Service enabled: `sudo systemctl enable ssh-helper`
+- [ ] Service started: `sudo systemctl start ssh-helper`
+- [ ] Nginx configured and reloaded
+- [ ] OAuth2-proxy running (for Cognito auth)
+- [ ] HTTPS certificate valid
+- [ ] Firewall allows port 8080 from localhost only
+- [ ] Logs reviewed: `journalctl -u ssh-helper -f`
 
 ## License
 
-MIT License - see LICENSE file
+MIT
 
-## Contributing
+## Related Projects
 
-Pull requests welcome! See CONTRIBUTING.md for guidelines.
+- **easy-cognito-nginx-gateway-auth** - Handles Cognito authentication for this app
+- **website-cloner** - Another app behind the same auth gateway
