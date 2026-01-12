@@ -1,0 +1,23 @@
+# SSH Helper Configuration
+
+aws:
+  # AWS region where security group is located
+  region: us-east-1
+
+  # Security group ID to manage
+  # Find this with: aws ec2 describe-security-groups
+  security_group_id: sg-0123456789abcdef0
+
+defaults:
+  # Default access duration if not specified
+  default_duration: 24h
+
+  # Maximum allowed duration
+  max_duration: 168h  # 7 days
+
+logging:
+  # Local audit log path
+  audit_log_path: ./logs/audit.log
+
+  # Optional: CloudWatch Logs group name
+  # cloudwatch_log_group: /ssh-helper/audit
