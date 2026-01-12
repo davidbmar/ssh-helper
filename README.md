@@ -11,6 +11,17 @@ A lightweight web-based SSH terminal with IP whitelisting support. Provides secu
 - ⚡ **WebSocket Connection**: Real-time terminal I/O
 - 🎨 **Modern UI**: Clean, professional interface
 
+## Deployment Status
+
+✅ **Currently Deployed and Running**
+
+- **Gateway**: https://52.43.35.1/
+- **Service**: Active on port 8080
+- **Systemd**: Enabled and running
+- **Authentication**: Protected by AWS Cognito via oauth2-proxy
+
+Access the terminal at: **https://52.43.35.1/**
+
 ## Architecture
 
 ```
@@ -318,16 +329,36 @@ npm run dev        # Development with auto-reload
 
 ## Deployment Checklist
 
-- [ ] Dependencies installed: `npm install`
-- [ ] Config file created and reviewed
-- [ ] Systemd service file created
-- [ ] Service enabled: `sudo systemctl enable ssh-helper`
-- [ ] Service started: `sudo systemctl start ssh-helper`
-- [ ] Nginx configured and reloaded
-- [ ] OAuth2-proxy running (for Cognito auth)
-- [ ] HTTPS certificate valid
-- [ ] Firewall allows port 8080 from localhost only
-- [ ] Logs reviewed: `journalctl -u ssh-helper -f`
+- [x] Dependencies installed: `npm install`
+- [x] Config file created and reviewed
+- [x] Systemd service file created at `/etc/systemd/system/ssh-helper.service`
+- [x] Service enabled: `sudo systemctl enable ssh-helper`
+- [x] Service started: `sudo systemctl start ssh-helper` (PID: 145850)
+- [x] Nginx configured at `/etc/nginx/sites-available/auth-gateway`
+- [x] Nginx reloaded: `sudo systemctl reload nginx`
+- [x] OAuth2-proxy running (port 4180)
+- [x] HTTPS certificate valid (self-signed for development)
+- [x] Port 8080 accessible from localhost only
+- [x] Logs verified: Service running successfully
+
+**Deployment Date:** 2026-01-12
+**Deployed By:** Claude Sonnet 4.5
+
+### Quick Status Check
+
+```bash
+# Check service status
+sudo systemctl status ssh-helper
+
+# View logs
+sudo journalctl -u ssh-helper -n 20
+
+# Test local access
+curl http://localhost:8080/
+
+# Test authenticated access
+curl -k https://52.43.35.1/
+```
 
 ## License
 
