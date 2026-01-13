@@ -166,34 +166,76 @@ sudo journalctl -u ssh-helper -n 100
 
 ## Nginx Configuration
 
-The application expects to be proxied through nginx with authentication. Example nginx config (already configured in `/etc/nginx/sites-enabled/auth-gateway`):
+This application uses a **modular nginx configuration architecture** where each app manages its own routing configuration. The ssh-helper repo contains two nginx files that are deployed to the gateway server.
 
+### Configuration Files in this Repo
+
+**nginx/upstream.conf** - Upstream definition:
 ```nginx
 upstream ssh_terminal {
     server 127.0.0.1:8080;
 }
+```
 
-location / {
-    # Authentication check
+**nginx/routes.conf** - Location block for /ssh endpoint:
+```nginx
+location /ssh {
+    # Authentication check via oauth2-proxy
     auth_request /oauth2/auth;
     error_page 401 = /oauth2/start?rd=$scheme://$host$request_uri;
 
-    # Pass authenticated user info
+    # Pass authentication headers from oauth2-proxy to backend
     auth_request_set $user $upstream_http_x_auth_request_user;
     auth_request_set $email $upstream_http_x_auth_request_email;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie;
 
-    # Proxy to SSH terminal
+    # Proxy to ssh terminal application (port 8080)
     proxy_pass http://ssh_terminal;
     proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Pass authenticated user info to backend
     proxy_set_header X-User-Email $email;
     proxy_set_header X-Auth-Request-User $user;
 
-    # WebSocket support
+    # WebSocket support for terminal sessions
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_read_timeout 86400;
 }
 ```
+
+### Deployment to Gateway Server
+
+When deploying or updating the nginx configuration, copy these files to the gateway:
+
+```bash
+# Copy upstream configuration
+sudo cp /home/ubuntu/src/ssh-helper/nginx/upstream.conf \
+        /etc/nginx/conf.d/system-upstreams/ssh-helper.conf
+
+# Copy routes configuration
+sudo cp /home/ubuntu/src/ssh-helper/nginx/routes.conf \
+        /etc/nginx/conf.d/routes/ssh-helper.conf
+
+# Test and reload nginx
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Architecture Benefits
+
+- **Separation of Concerns**: ssh-helper owns its routing configuration
+- **Version Control**: nginx configs are versioned with application code
+- **Easy Updates**: Modify routes without touching the central gateway config
+- **No Conflicts**: Each app manages its own namespace (/ssh, /cloner, etc.)
+
+### Routes Managed by this App
+
+- `/ssh` - SSH terminal web interface (port 8080)
 
 ## API Endpoints
 
