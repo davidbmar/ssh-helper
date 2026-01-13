@@ -72,7 +72,8 @@
     function connect() {
         // Determine WebSocket URL (use wss:// if page is https://)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}`;
+        // Include the current path so WebSocket connects to the same endpoint
+        const wsUrl = `${protocol}//${window.location.host}${window.location.pathname}`;
 
         console.log('[Terminal] Connecting to:', wsUrl);
         updateStatus('Connecting...', false);
