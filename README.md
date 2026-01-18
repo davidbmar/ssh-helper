@@ -60,6 +60,38 @@ cp config.json config.local.json
 # Edit config.local.json as needed
 ```
 
+### Bootstrap Installation (Recommended)
+
+For automated setup with systemd service and nginx configuration:
+
+1. **Ensure auth gateway is set up first** (required for nginx includes)
+
+2. **Run bootstrap script**:
+   ```bash
+   ./bootstrap.sh
+   ```
+
+The bootstrap script will:
+- Verify Node.js and npm are installed
+- Install all npm dependencies
+- Create default config.json if not exists
+- Install systemd service for auto-start
+- Copy nginx configurations to modular include directories
+- Start the ssh-helper service
+
+3. **Verify installation**:
+   ```bash
+   ./tests/verify-ssh-helper.sh
+   ```
+
+4. **Check service status**:
+   ```bash
+   sudo systemctl status ssh-helper
+   sudo journalctl -u ssh-helper -f
+   ```
+
+The SSH helper will be accessible at `https://YOUR_IP/ssh/`.
+
 ## Configuration
 
 Edit `config.json` to customize behavior:

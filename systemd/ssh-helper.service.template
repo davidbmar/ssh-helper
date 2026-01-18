@@ -1,0 +1,27 @@
+[Unit]
+Description=SSH Helper - Web Terminal
+After=network.target oauth2-proxy.service
+Wants=oauth2-proxy.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory={{WORKING_DIRECTORY}}
+ExecStart=/usr/bin/node {{WORKING_DIRECTORY}}/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssh-helper
+
+# Environment
+Environment=NODE_ENV=production
+Environment=PORT=8080
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
